@@ -22,15 +22,12 @@ final class PhabricatorFactApplication extends PhabricatorApplication {
     return self::GROUP_UTILITIES;
   }
 
-  public function isPrototype() {
-    return true;
-  }
-
   public function getRoutes() {
     return array(
       '/fact/' => array(
         '' => 'PhabricatorFactHomeController',
-        '(?<mode>chart|draw)/' => 'PhabricatorFactChartController',
+        'chart/(?P<chartKey>[^/]+)/(?:(?P<mode>draw)/)?' =>
+          'PhabricatorFactChartController',
         'object/(?<phid>[^/]+)/' => 'PhabricatorFactObjectController',
       ),
     );

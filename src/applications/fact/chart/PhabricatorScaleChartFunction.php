@@ -1,28 +1,28 @@
 <?php
 
 final class PhabricatorScaleChartFunction
-  extends PhabricatorChartFunction {
+  extends PhabricatorPureChartFunction {
 
   const FUNCTIONKEY = 'scale';
 
   protected function newArguments() {
     return array(
       $this->newArgument()
-        ->setName('x')
-        ->setType('function')
-        ->setIsSourceFunction(true),
-      $this->newArgument()
         ->setName('scale')
         ->setType('number'),
     );
   }
 
-  protected function canEvaluateFunction() {
-    return true;
-  }
+  public function evaluateFunction(array $xv) {
+    $scale = $this->getArgument('scale');
 
-  protected function evaluateFunction($x) {
-    return $x * $this->getArgument('scale');
+    $yv = array();
+
+    foreach ($xv as $x) {
+      $yv[] = $x * $scale;
+    }
+
+    return $yv;
   }
 
 }
