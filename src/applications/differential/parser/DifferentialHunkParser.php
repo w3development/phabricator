@@ -36,7 +36,7 @@ final class DifferentialHunkParser extends Phobject {
   }
   public function getVisibleLinesMask() {
     if ($this->visibleLinesMask === null) {
-      throw new PhutilInvalidStateException('generateVisibileLinesMask');
+      throw new PhutilInvalidStateException('generateVisibleLinesMask');
     }
     return $this->visibleLinesMask;
   }
@@ -354,7 +354,7 @@ final class DifferentialHunkParser extends Phobject {
     return $this;
   }
 
-  public function generateVisibileLinesMask($lines_context) {
+  public function generateVisibleLinesMask($lines_context) {
     $old = $this->getOldLines();
     $new = $this->getNewLines();
     $max_length = max(count($old), count($new));
@@ -791,7 +791,7 @@ final class DifferentialHunkParser extends Phobject {
     // of the lines, and these copies truly weren't any different.
     //
     // When lines are aligned and marked identical, but they're not actually
-    // identcal, we now mark them as changed. The rest of the processing will
+    // identical, we now mark them as changed. The rest of the processing will
     // figure out how to render them appropritely.
 
     $new = $this->getNewLines();
