@@ -4,6 +4,11 @@
 $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/init/init-script.php';
 
+$error_log = id(new PhutilErrorLog())
+  ->setLogName(pht('SSH Error Log'))
+  ->setLogPath(PhabricatorEnv::getEnvConfig('log.ssh-error.path'))
+  ->activateLog();
+
 // TODO: For now, this is using "parseParital()", not "parse()". This allows
 // the script to accept (and ignore) additional arguments. This preserves
 // backward compatibility until installs have time to migrate to the new
@@ -31,7 +36,7 @@ $authstruct_raw = $cache->getKey($authstruct_key);
 
 $authstruct = null;
 
-if (strlen($authstruct_raw)) {
+if ($authstruct_raw !== null && strlen($authstruct_raw)) {
   try {
     $authstruct = phutil_json_decode($authstruct_raw);
   } catch (Exception $ex) {
@@ -130,7 +135,7 @@ foreach ($authstruct['keys'] as $key_struct) {
 
   $cmd = csprintf('%s %Ls', $bin, $key_argv);
 
-  if (strlen($instance)) {
+  if ($instance !== null && strlen($instance)) {
     $cmd = csprintf('PHABRICATOR_INSTANCE=%s %C', $instance, $cmd);
   }
 

@@ -311,9 +311,17 @@ final class DifferentialRevision extends DifferentialDAO
     // which the actor may be able to use their authority over to gain the
     // ability to force-accept for other packages. This query doesn't apply
     // dominion rules yet, and we'll bypass those rules later on.
+
+    // See T13657. We ignore "watcher" packages which don't grant their owners
+    // permission to force accept anything.
+
     $authority_query = id(new PhabricatorOwnersPackageQuery())
       ->setViewer($viewer)
       ->withStatuses(array(PhabricatorOwnersPackage::STATUS_ACTIVE))
+      ->withAuthorityModes(
+        array(
+          PhabricatorOwnersPackage::AUTHORITY_STRONG,
+        ))
       ->withAuthorityPHIDs(array($viewer->getPHID()))
       ->withControl($repository_phid, $paths);
     $authority_packages = $authority_query->execute();
@@ -1022,16 +1030,9 @@ final class DifferentialRevision extends DifferentialDAO
         $engine->destroyObject($diff);
       }
 
-      $conn_w = $this->establishConnection('w');
-
-      // we have to do paths a little differently as they do not have
-      // an id or phid column for delete() to act on
-      $dummy_path = new DifferentialAffectedPath();
-      queryfx(
-        $conn_w,
-        'DELETE FROM %T WHERE revisionID = %d',
-        $dummy_path->getTableName(),
-        $this->getID());
+      id(new DifferentialAffectedPathEngine())
+        ->setRevision($this)
+        ->destroyAffectedPaths();
 
       $viewstate_query = id(new DifferentialViewStateQuery())
         ->setViewer($viewer)

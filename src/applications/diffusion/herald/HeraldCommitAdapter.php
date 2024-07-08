@@ -166,8 +166,8 @@ final class HeraldCommitAdapter
   public function loadAuditNeededPackages() {
     if ($this->auditNeededPackages === null) {
       $status_arr = array(
-        PhabricatorAuditStatusConstants::AUDIT_REQUIRED,
-        PhabricatorAuditStatusConstants::CONCERNED,
+        PhabricatorAuditRequestStatus::AUDIT_REQUIRED,
+        PhabricatorAuditRequestStatus::CONCERNED,
       );
       $requests = id(new PhabricatorRepositoryAuditRequest())
           ->loadAllWhere(
@@ -267,6 +267,11 @@ final class HeraldCommitAdapter
 
     $raw = $diff_file->loadFileData();
 
+    // See T13667. This happens when a commit is empty and affects no files.
+    if (!strlen($raw)) {
+      return false;
+    }
+
     $parser = new ArcanistDiffParser();
     $changes = $parser->parseDiff($raw);
 
@@ -288,6 +293,10 @@ final class HeraldCommitAdapter
         $this->commitDiff = $ex;
         phlog($ex);
       }
+    }
+
+    if ($this->commitDiff === false) {
+      return array();
     }
 
     if ($this->commitDiff instanceof Exception) {

@@ -23,9 +23,9 @@ final class DiffusionGitRawDiffQuery extends DiffusionRawDiffQuery {
       // Check if this is the root commit by seeing if it has parents, since
       // `git diff X^ X` does not work if "X" is the initial commit.
       list($parents) = $repository->execxLocalCommand(
-        'log -n 1 --format=%s %s --',
-        '%P',
-        $commit);
+        'log -n 1 %s %s --',
+        '--format=%P',
+        gitsprintf('%s', $commit));
 
       if (strlen(trim($parents))) {
         $against = $commit.'^';
@@ -35,15 +35,15 @@ final class DiffusionGitRawDiffQuery extends DiffusionRawDiffQuery {
     }
 
     $path = $drequest->getPath();
-    if (!strlen($path)) {
+    if ($path === null || !strlen($path)) {
       $path = '.';
     }
 
     return $repository->getLocalCommandFuture(
       'diff %Ls %s %s -- %s',
       $options,
-      $against,
-      $commit,
+      gitsprintf('%s', $against),
+      gitsprintf('%s', $commit),
       $path);
   }
 

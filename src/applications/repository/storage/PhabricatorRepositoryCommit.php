@@ -36,7 +36,7 @@ final class PhabricatorRepositoryCommit
   const IMPORTED_PUBLISH = 8;
   const IMPORTED_ALL = 11;
 
-  const IMPORTED_CLOSEABLE = 1024;
+  const IMPORTED_PERMANENT = 1024;
   const IMPORTED_UNREACHABLE = 2048;
 
   private $commitData = self::ATTACHABLE;
@@ -312,14 +312,14 @@ final class PhabricatorRepositoryCommit
 
     foreach ($requests as $request) {
       switch ($request->getAuditStatus()) {
-        case PhabricatorAuditStatusConstants::AUDIT_REQUIRED:
-        case PhabricatorAuditStatusConstants::AUDIT_REQUESTED:
+        case PhabricatorAuditRequestStatus::AUDIT_REQUIRED:
+        case PhabricatorAuditRequestStatus::AUDIT_REQUESTED:
           $any_need = true;
           break;
-        case PhabricatorAuditStatusConstants::ACCEPTED:
+        case PhabricatorAuditRequestStatus::ACCEPTED:
           $any_accept = true;
           break;
-        case PhabricatorAuditStatusConstants::CONCERNED:
+        case PhabricatorAuditRequestStatus::CONCERNED:
           $any_concern = true;
           break;
       }
@@ -467,7 +467,7 @@ final class PhabricatorRepositoryCommit
   }
 
   public function isPermanentCommit() {
-    return (bool)$this->isPartiallyImported(self::IMPORTED_CLOSEABLE);
+    return (bool)$this->isPartiallyImported(self::IMPORTED_PERMANENT);
   }
 
   public function newCommitAuthorView(PhabricatorUser $viewer) {
@@ -478,7 +478,7 @@ final class PhabricatorRepositoryCommit
     }
 
     $author = $this->getRawAuthorStringForDisplay();
-    if (strlen($author)) {
+    if ($author !== null && strlen($author)) {
       return DiffusionView::renderName($author);
     }
 
@@ -493,7 +493,7 @@ final class PhabricatorRepositoryCommit
     }
 
     $committer = $this->getRawCommitterStringForDisplay();
-    if (strlen($committer)) {
+    if ($committer !== null && strlen($committer)) {
       return DiffusionView::renderName($committer);
     }
 
@@ -526,6 +526,12 @@ final class PhabricatorRepositoryCommit
   private function getRawCommitterStringForDisplay() {
     $data = $this->getCommitData();
     return $data->getCommitterString();
+  }
+
+  public function getCommitMessageForDisplay() {
+    $data = $this->getCommitData();
+    $message = $data->getCommitMessage();
+    return $message;
   }
 
   public function newCommitRef(PhabricatorUser $viewer) {
@@ -668,9 +674,9 @@ final class PhabricatorRepositoryCommit
     return array(
       'buildable.commit' => pht('The commit identifier, if applicable.'),
       'repository.callsign' =>
-        pht('The callsign of the repository in Phabricator.'),
+        pht('The callsign of the repository.'),
       'repository.phid' =>
-        pht('The PHID of the repository in Phabricator.'),
+        pht('The PHID of the repository.'),
       'repository.vcs' =>
         pht('The version control system, either "svn", "hg" or "git".'),
       'repository.uri' =>
@@ -708,8 +714,8 @@ final class PhabricatorRepositoryCommit
     if (!$path) {
       throw new Exception(
         pht(
-          'This commit ("%s") is associated with a repository ("%s") that '.
-          'with a remote URI ("%s") that does not appear to be hosted on '.
+          'This commit ("%s") is associated with a repository ("%s") which '.
+          'has a remote URI ("%s") that does not appear to be hosted on '.
           'GitHub. Repositories must be hosted on GitHub to be built with '.
           'CircleCI.',
           $commit_phid,
@@ -939,7 +945,10 @@ final class PhabricatorRepositoryCommit
   }
 
   public function getConduitSearchAttachments() {
-    return array();
+    return array(
+      id(new DiffusionAuditorsSearchEngineAttachment())
+        ->setAttachmentKey('auditors'),
+    );
   }
 
 

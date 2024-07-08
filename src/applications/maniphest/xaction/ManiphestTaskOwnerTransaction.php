@@ -112,7 +112,8 @@ final class ManiphestTaskOwnerTransaction
     foreach ($xactions as $xaction) {
       $old = $xaction->getOldValue();
       $new = $xaction->getNewValue();
-      if (!strlen($new)) {
+
+      if (!phutil_nonempty_string($new)) {
         continue;
       }
 
@@ -127,8 +128,7 @@ final class ManiphestTaskOwnerTransaction
 
       if (!$assignee_list) {
         $errors[] = $this->newInvalidError(
-          pht('User "%s" is not a valid user.',
-          $new));
+          pht('User "%s" is not a valid user.', $new));
       }
     }
     return $errors;

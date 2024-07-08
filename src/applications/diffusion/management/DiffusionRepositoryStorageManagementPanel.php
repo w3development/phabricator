@@ -46,6 +46,7 @@ final class DiffusionRepositoryStorageManagementPanel
     return array(
       $this->buildStorageStatusPanel(),
       $this->buildClusterStatusPanel(),
+      $this->buildRefsStatusPanels(),
     );
   }
 
@@ -88,7 +89,7 @@ final class DiffusionRepositoryStorageManagementPanel
             AlmanacClusterRepositoryServiceType::SERVICETYPE,
           ))
         ->withPHIDs(array($service_phid))
-        ->needBindings(true)
+        ->needActiveBindings(true)
         ->executeOne();
       if (!$service) {
         // TODO: Viewer may not have permission to see the service, or it may
@@ -103,7 +104,7 @@ final class DiffusionRepositoryStorageManagementPanel
 
     $rows = array();
     if ($service) {
-      $bindings = $service->getBindings();
+      $bindings = $service->getActiveBindings();
       $bindings = mgroup($bindings, 'getDevicePHID');
 
       // This is an unusual read which always comes from the master.
@@ -116,29 +117,19 @@ final class DiffusionRepositoryStorageManagementPanel
 
       $versions = mpull($versions, null, 'getDevicePHID');
 
-      // List enabled devices first, then sort devices in each group by name.
       $sort = array();
       foreach ($bindings as $key => $binding_group) {
-        $all_disabled = $this->isDisabledGroup($binding_group);
-
         $sort[$key] = id(new PhutilSortVector())
-          ->addInt($all_disabled ? 1 : 0)
           ->addString(head($binding_group)->getDevice()->getName());
       }
       $sort = msortv($sort, 'getSelf');
       $bindings = array_select_keys($bindings, array_keys($sort)) + $bindings;
 
       foreach ($bindings as $binding_group) {
-        $all_disabled = $this->isDisabledGroup($binding_group);
         $any_binding = head($binding_group);
 
-        if ($all_disabled) {
-          $binding_icon = 'fa-times grey';
-          $binding_tip = pht('Disabled');
-        } else {
-          $binding_icon = 'fa-folder-open green';
-          $binding_tip = pht('Active');
-        }
+        $binding_icon = 'fa-folder-open green';
+        $binding_tip = pht('Active');
 
         $binding_icon = id(new PHUIIconView())
           ->setIcon($binding_icon)
@@ -199,15 +190,19 @@ final class DiffusionRepositoryStorageManagementPanel
           }
         }
 
+        $last_writer = null;
+        $writer_epoch = null;
         if ($write_properties) {
           $writer_phid = idx($write_properties, 'userPHID');
-          $last_writer = $viewer->renderHandle($writer_phid);
+
+          if ($writer_phid) {
+            $last_writer = $viewer->renderHandle($writer_phid);
+          }
 
           $writer_epoch = idx($write_properties, 'epoch');
-          $writer_epoch = phabricator_datetime($writer_epoch, $viewer);
-        } else {
-          $last_writer = null;
-          $writer_epoch = null;
+          if ($writer_epoch) {
+            $writer_epoch = phabricator_datetime($writer_epoch, $viewer);
+          }
         }
 
         $rows[] = array(
@@ -250,16 +245,129 @@ final class DiffusionRepositoryStorageManagementPanel
     return $this->newBox(pht('Cluster Status'), $table);
   }
 
-  private function isDisabledGroup(array $binding_group) {
-    assert_instances_of($binding_group, 'AlmanacBinding');
+  private function buildRefsStatusPanels() {
+    $repository = $this->getRepository();
 
-    foreach ($binding_group as $binding) {
-      if (!$binding->getIsDisabled()) {
-        return false;
-      }
+    $service_phid = $repository->getAlmanacServicePHID();
+    if (!$service_phid) {
+      // If this repository isn't clustered, don't bother rendering anything.
+      // There are enough other context clues that another empty panel isn't
+      // useful.
+      return;
     }
 
-    return true;
+    $all_protocols = array(
+      'http',
+      'https',
+      'ssh',
+    );
+
+    $readable_panel = $this->buildRefsStatusPanel(
+      pht('Readable Service Refs'),
+      array(
+        'neverProxy' => false,
+        'protocols' => $all_protocols,
+        'writable' => false,
+      ));
+
+    $writable_panel = $this->buildRefsStatusPanel(
+      pht('Writable Service Refs'),
+      array(
+        'neverProxy' => false,
+        'protocols' => $all_protocols,
+        'writable' => true,
+      ));
+
+    return array(
+      $readable_panel,
+      $writable_panel,
+    );
+  }
+
+  private function buildRefsStatusPanel(
+    $title,
+    $options) {
+
+    $repository = $this->getRepository();
+    $viewer = $this->getViewer();
+
+    $caught = null;
+    try {
+      $refs = $repository->getAlmanacServiceRefs($viewer, $options);
+    } catch (Exception $ex) {
+      $caught = $ex;
+    } catch (Throwable $ex) {
+      $caught = $ex;
+    }
+
+    $info_view = null;
+    if ($caught) {
+      $refs = array();
+      $info_view = id(new PHUIInfoView())
+        ->setErrors(
+          array(
+            phutil_escape_html_newlines($caught->getMessage()),
+          ));
+    }
+
+    $phids = array();
+    foreach ($refs as $ref) {
+      $phids[] = $ref->getDevicePHID();
+    }
+
+    $handles = $viewer->loadHandles($phids);
+
+    $icon_writable = id(new PHUIIconView())
+      ->setIcon('fa-pencil', 'green');
+
+    $icon_unwritable = id(new PHUIIconView())
+      ->setIcon('fa-times', 'grey');
+
+    $rows = array();
+    foreach ($refs as $ref) {
+      $device_phid = $ref->getDevicePHID();
+      $device_handle = $handles[$device_phid];
+
+      if ($ref->isWritable()) {
+        $writable_icon = $icon_writable;
+        $writable_text = pht('Read/Write');
+      } else {
+        $writable_icon = $icon_unwritable;
+        $writable_text = pht('Read Only');
+      }
+
+      $rows[] = array(
+        $device_handle->renderLink(),
+        $ref->getURI(),
+        $writable_icon,
+        $writable_text,
+      );
+    }
+
+    $table = id(new AphrontTableView($rows))
+      ->setNoDataString(pht('No repository service refs available.'))
+      ->setHeaders(
+        array(
+          pht('Device'),
+          pht('Internal Service URI'),
+          null,
+          pht('I/O'),
+        ))
+      ->setColumnClasses(
+        array(
+          null,
+          'wide',
+          'icon',
+          null,
+        ));
+
+    $box_view = $this->newBox($title, $table);
+
+    if ($info_view) {
+      $box_view->setInfoView($info_view);
+    }
+
+    return $box_view;
   }
 
 }

@@ -60,6 +60,7 @@ return array(
     'javelin-behavior-global-drag-and-drop',
     'javelin-behavior-phabricator-reveal-content',
     'phui-hovercard',
+    'phui-hovercard-list',
     'javelin-behavior-phui-hovercards',
     'javelin-color',
     'javelin-fx',
@@ -211,6 +212,7 @@ return array(
 
     'javelin-behavior-aphront-more',
 
+    'phabricator-diff-inline-content-state',
     'phabricator-diff-inline',
     'phabricator-diff-changeset',
     'phabricator-diff-changeset-list',

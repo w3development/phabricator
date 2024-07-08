@@ -9,6 +9,7 @@ final class AlmanacDeviceQuery
   private $namePrefix;
   private $nameSuffix;
   private $isClusterDevice;
+  private $statuses;
 
   public function withIDs(array $ids) {
     $this->ids = $ids;
@@ -35,6 +36,11 @@ final class AlmanacDeviceQuery
     return $this;
   }
 
+  public function withStatuses(array $statuses) {
+    $this->statuses = $statuses;
+    return $this;
+  }
+
   public function withNameNgrams($ngrams) {
     return $this->withNgramsConstraint(
       new AlmanacDeviceNameNgrams(),
@@ -48,10 +54,6 @@ final class AlmanacDeviceQuery
 
   public function newResultObject() {
     return new AlmanacDevice();
-  }
-
-  protected function loadPage() {
-    return $this->loadStandardPage($this->newResultObject());
   }
 
   protected function buildWhereClauseParts(AphrontDatabaseConnection $conn) {
@@ -101,6 +103,13 @@ final class AlmanacDeviceQuery
         $conn,
         'device.isBoundToClusterService = %d',
         (int)$this->isClusterDevice);
+    }
+
+    if ($this->statuses !== null) {
+      $where[] = qsprintf(
+        $conn,
+        'device.status IN (%Ls)',
+        $this->statuses);
     }
 
     return $where;

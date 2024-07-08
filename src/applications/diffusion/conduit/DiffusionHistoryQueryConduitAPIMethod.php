@@ -45,28 +45,41 @@ final class DiffusionHistoryQueryConduitAPIMethod
     $repository = $drequest->getRepository();
     $commit_hash = $request->getValue('commit');
     $against_hash = $request->getValue('against');
-    $path = $request->getValue('path');
     $offset = $request->getValue('offset');
     $limit = $request->getValue('limit');
 
-    if (strlen($against_hash)) {
-      $commit_range = "${against_hash}..${commit_hash}";
+    $path = $request->getValue('path');
+    if ($path === null || !strlen($path)) {
+      $path = null;
+    }
+
+    if ($against_hash !== null && strlen($against_hash)) {
+      $commit_range = "{$against_hash}..{$commit_hash}";
     } else {
       $commit_range = $commit_hash;
     }
 
+    $argv = array();
+
+    $argv[] = '--skip';
+    $argv[] = $offset;
+
+    $argv[] = '--max-count';
+    $argv[] = $limit;
+
+    $argv[] = '--format=%H:%P';
+
+    $argv[] = gitsprintf('%s', $commit_range);
+
+    $argv[] = '--';
+
+    if ($path !== null) {
+      $argv[] = $path;
+    }
+
     list($stdout) = $repository->execxLocalCommand(
-      'log '.
-        '--skip=%d '.
-        '-n %d '.
-        '--pretty=format:%s '.
-        '%s -- %C',
-      $offset,
-      $limit,
-      '%H:%P',
-      $commit_range,
-      // Git omits merge commits if the path is provided, even if it is empty.
-      (strlen($path) ? csprintf('%s', $path) : ''));
+      'log %Ls',
+      $argv);
 
     $lines = explode("\n", trim($stdout));
     $lines = array_filter($lines);
@@ -122,28 +135,33 @@ final class DiffusionHistoryQueryConduitAPIMethod
     // stop history (this is more consistent with the Mercurial worldview of
     // branches).
 
+    $path_args = array();
     if (strlen($path)) {
-      $path_arg = csprintf('%s', $path);
+      $path_args[] = $path;
       $revset_arg = hgsprintf(
         'reverse(ancestors(%s))',
         $commit_hash);
     } else {
-      $path_arg = '';
       $revset_arg = hgsprintf(
         'reverse(ancestors(%s)) and branch(%s)',
-        $drequest->getBranch(),
-        $commit_hash);
+        $commit_hash,
+        $drequest->getBranch());
+    }
+
+    $hg_analyzer = PhutilBinaryAnalyzer::getForBinary('hg');
+    if ($hg_analyzer->isMercurialTemplatePnodeAvailable()) {
+      $hg_log_template = '{node} {p1.node} {p2.node}\\n';
+    } else {
+      $hg_log_template = '{node} {p1node} {p2node}\\n';
     }
 
     list($stdout) = $repository->execxLocalCommand(
-      'log --debug --template %s --limit %d --rev %s -- %C',
-      '{node};{parents}\\n',
+      'log --template %s --limit %d --rev %s -- %Ls',
+      $hg_log_template,
       ($offset + $limit), // No '--skip' in Mercurial.
       $revset_arg,
-      $path_arg);
+      $path_args);
 
-    $stdout = DiffusionMercurialCommandEngine::filterMercurialDebugOutput(
-      $stdout);
     $lines = explode("\n", trim($stdout));
     $lines = array_slice($lines, $offset);
 
@@ -152,27 +170,18 @@ final class DiffusionHistoryQueryConduitAPIMethod
 
     $last = null;
     foreach (array_reverse($lines) as $line) {
-      list($hash, $parents) = explode(';', $line);
-      $parents = trim($parents);
-      if (!$parents) {
-        if ($last === null) {
-          $parent_map[$hash] = array('...');
-        } else {
-          $parent_map[$hash] = array($last);
+      $parts = explode(' ', trim($line));
+      $hash = $parts[0];
+      $parents = array_slice($parts, 1, 2);
+      foreach ($parents as $parent) {
+        if (!preg_match('/^0+\z/', $parent)) {
+          $parent_map[$hash][] = $parent;
         }
-      } else {
-        $parents = preg_split('/\s+/', $parents);
-        foreach ($parents as $parent) {
-          list($plocal, $phash) = explode(':', $parent);
-          if (!preg_match('/^0+$/', $phash)) {
-            $parent_map[$hash][] = $phash;
-          }
-        }
-        // This may happen for the zeroth commit in repository, both hashes
-        // are "000000000...".
-        if (empty($parent_map[$hash])) {
-          $parent_map[$hash] = array('...');
-        }
+      }
+      // This may happen for the zeroth commit in repository, both hashes
+      // are "000000000...".
+      if (empty($parent_map[$hash])) {
+        $parent_map[$hash] = array('...');
       }
 
       // The rendering code expects the first commit to be "mainline", like

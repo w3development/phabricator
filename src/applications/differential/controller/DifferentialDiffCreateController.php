@@ -27,7 +27,13 @@ final class DifferentialDiffCreateController extends DifferentialController {
     $diff = null;
     // This object is just for policy stuff
     $diff_object = DifferentialDiff::initializeNewDiff($viewer);
-    $repository_phid = null;
+
+    if ($revision) {
+      $repository_phid = $revision->getRepositoryPHID();
+    } else {
+      $repository_phid = null;
+    }
+
     $errors = array();
     $e_diff = null;
     $e_file = null;
@@ -106,8 +112,9 @@ final class DifferentialDiffCreateController extends DifferentialController {
           array(
             array(
               pht(
-                'The best way to create a diff is to use the Arcanist '.
-                'command-line tool.'),
+                'The best way to create a diff is to use the %s '.
+                'command-line tool.',
+                PlatformSymbols::getPlatformClientName()),
               ' ',
               $arcanist_link,
             ),

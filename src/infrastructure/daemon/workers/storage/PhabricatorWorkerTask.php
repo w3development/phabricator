@@ -11,6 +11,7 @@ abstract class PhabricatorWorkerTask extends PhabricatorWorkerDAO {
   protected $dataID;
   protected $priority;
   protected $objectPHID;
+  protected $containerPHID;
 
   private $data;
   private $executionException;
@@ -25,10 +26,14 @@ abstract class PhabricatorWorkerTask extends PhabricatorWorkerDAO {
         'failureTime' => 'epoch?',
         'priority' => 'uint32',
         'objectPHID' => 'phid?',
+        'containerPHID' => 'phid?',
       ),
       self::CONFIG_KEY_SCHEMA => array(
         'key_object' => array(
           'columns' => array('objectPHID'),
+        ),
+        'key_container' => array(
+          'columns' => array('containerPHID'),
         ),
       ),
     ) + parent::getConfiguration();
@@ -61,7 +66,8 @@ abstract class PhabricatorWorkerTask extends PhabricatorWorkerDAO {
     $class = $this->getTaskClass();
 
     try {
-      // NOTE: If the class does not exist, libphutil will throw an exception.
+      // NOTE: If the class does not exist, the autoloader will throw an
+      // exception.
       class_exists($class);
     } catch (PhutilMissingSymbolException $ex) {
       throw new PhabricatorWorkerPermanentFailureException(

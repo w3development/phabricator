@@ -41,6 +41,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
   const METADATA_STORAGE = 'storage';
   const METADATA_INTEGRITY = 'integrity';
   const METADATA_CHUNK = 'chunk';
+  const METADATA_ALT_TEXT = 'alt';
 
   const STATUS_ACTIVE = 'active';
   const STATUS_DELETED = 'deleted';
@@ -287,7 +288,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
     // update the parent file if a MIME type hasn't been provided. This matters
     // for large media files like video.
     $mime_type = idx($params, 'mime-type');
-    if (!strlen($mime_type)) {
+    if ($mime_type === null || !strlen($mime_type)) {
       $file->setMimeType('application/octet-stream');
     }
 
@@ -855,7 +856,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
     // instance identity in the path allows us to distinguish between requests
     // originating from different instances but served through the same CDN.
     $instance = PhabricatorEnv::getEnvConfig('cluster.instance');
-    if (strlen($instance)) {
+    if ($instance !== null && strlen($instance)) {
       $parts[] = '@'.$instance;
     }
 
@@ -902,7 +903,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
     $parts[] = 'xform';
 
     $instance = PhabricatorEnv::getEnvConfig('cluster.instance');
-    if (strlen($instance)) {
+    if ($instance !== null && strlen($instance)) {
       $parts[] = '@'.$instance;
     }
 
@@ -1274,6 +1275,72 @@ final class PhabricatorFile extends PhabricatorFileDAO
     return idx($this->metadata, self::METADATA_IMAGE_WIDTH);
   }
 
+  public function getAltText() {
+    $alt = $this->getCustomAltText();
+
+    if ($alt !== null && strlen($alt)) {
+      return $alt;
+    }
+
+    return $this->getDefaultAltText();
+  }
+
+  public function getCustomAltText() {
+    return idx($this->metadata, self::METADATA_ALT_TEXT);
+  }
+
+  public function setCustomAltText($value) {
+    $value = phutil_string_cast($value);
+
+    if (!strlen($value)) {
+      $value = null;
+    }
+
+    if ($value === null) {
+      unset($this->metadata[self::METADATA_ALT_TEXT]);
+    } else {
+      $this->metadata[self::METADATA_ALT_TEXT] = $value;
+    }
+
+    return $this;
+  }
+
+  public function getDefaultAltText() {
+    $parts = array();
+
+    $name = $this->getName();
+    if ($name !== null && strlen($name)) {
+      $parts[] = $name;
+    }
+
+    $stats = array();
+
+    $image_x = $this->getImageHeight();
+    $image_y = $this->getImageWidth();
+
+    if ($image_x && $image_y) {
+      $stats[] = pht(
+        "%d\xC3\x97%d px",
+        new PhutilNumber($image_x),
+        new PhutilNumber($image_y));
+    }
+
+    $bytes = $this->getByteSize();
+    if ($bytes) {
+      $stats[] = phutil_format_bytes($bytes);
+    }
+
+    if ($stats) {
+      $parts[] = pht('(%s)', implode(', ', $stats));
+    }
+
+    if (!$parts) {
+      return null;
+    }
+
+    return implode(' ', $parts);
+  }
+
   public function getCanCDN() {
     if (!$this->isViewableImage()) {
       return false;
@@ -1349,28 +1416,25 @@ final class PhabricatorFile extends PhabricatorFileDAO
    * @return this
    */
   public function attachToObject($phid) {
-    $edge_type = PhabricatorObjectHasFileEdgeType::EDGECONST;
+    $attachment_table = new PhabricatorFileAttachment();
+    $attachment_conn = $attachment_table->establishConnection('w');
 
-    id(new PhabricatorEdgeEditor())
-      ->addEdge($phid, $edge_type, $this->getPHID())
-      ->save();
-
-    return $this;
-  }
-
-
-  /**
-   * Remove the policy edge between this file and some object.
-   *
-   * @param phid Object PHID to detach from.
-   * @return this
-   */
-  public function detachFromObject($phid) {
-    $edge_type = PhabricatorObjectHasFileEdgeType::EDGECONST;
-
-    id(new PhabricatorEdgeEditor())
-      ->removeEdge($phid, $edge_type, $this->getPHID())
-      ->save();
+    queryfx(
+      $attachment_conn,
+      'INSERT INTO %R (objectPHID, filePHID, attachmentMode,
+          attacherPHID, dateCreated, dateModified)
+        VALUES (%s, %s, %s, %ns, %d, %d)
+        ON DUPLICATE KEY UPDATE
+          attachmentMode = VALUES(attachmentMode),
+          attacherPHID = VALUES(attacherPHID),
+          dateModified = VALUES(dateModified)',
+      $attachment_table,
+      $phid,
+      $this->getPHID(),
+      PhabricatorFileAttachment::MODE_ATTACH,
+      null,
+      PhabricatorTime::getNow(),
+      PhabricatorTime::getNow());
 
     return $this;
   }
@@ -1676,6 +1740,10 @@ final class PhabricatorFile extends PhabricatorFileDAO
       'uri' => PhabricatorEnv::getURI($this->getURI()),
       'dataURI' => $this->getCDNURI('data'),
       'size' => (int)$this->getByteSize(),
+      'alt' => array(
+        'custom' => $this->getCustomAltText(),
+        'default' => $this->getDefaultAltText(),
+      ),
     );
   }
 

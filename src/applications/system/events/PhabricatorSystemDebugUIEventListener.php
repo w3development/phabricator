@@ -42,7 +42,17 @@ final class PhabricatorSystemDebugUIEventListener
     $submenu[] = id(new PhabricatorActionView())
       ->setIcon('fa-address-card-o')
       ->setName(pht('View Hovercard'))
-      ->setHref(urisprintf('/search/hovercard/?phids[]=%s', $phid));
+      ->setHref(urisprintf('/search/hovercard/?names=%s', $phid));
+
+    if ($object instanceof DifferentialRevision) {
+      $submenu[] = id(new PhabricatorActionView())
+        ->setIcon('fa-database')
+        ->setName(pht('View Affected Path Index'))
+        ->setHref(
+          urisprintf(
+            '/differential/revision/paths/%s/',
+            $object->getID()));
+    }
 
     $developer_action = id(new PhabricatorActionView())
       ->setName(pht('Advanced/Developer...'))

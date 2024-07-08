@@ -32,10 +32,6 @@ final class AphrontApplicationConfiguration
     return $request;
   }
 
-  public function build404Controller() {
-    return array(new Phabricator404Controller(), array());
-  }
-
   public function buildRedirectController($uri, $external) {
     return array(
       new PhabricatorRedirectController(),
@@ -87,7 +83,7 @@ final class AphrontApplicationConfiguration
    * @phutil-external-symbol class PhabricatorStartup
    */
   public static function runHTTPRequest(AphrontHTTPSink $sink) {
-    if (isset($_SERVER['HTTP_X_PHABRICATOR_SELFCHECK'])) {
+    if (isset($_SERVER['HTTP_X_SETUP_SELFCHECK'])) {
       $response = self::newSelfCheckResponse();
       return self::writeResponse($sink, $response);
     }
@@ -176,7 +172,7 @@ final class AphrontApplicationConfiguration
     }
 
     $host = AphrontRequest::getHTTPHeader('Host');
-    $path = $_REQUEST['__path__'];
+    $path = PhabricatorStartup::getRequestPath();
 
     $application = new self();
 
@@ -423,9 +419,9 @@ final class AphrontApplicationConfiguration
           throw new AphrontMalformedRequestException(
             pht('No %s', 'SERVER_ADDR'),
             pht(
-              'Phabricator is configured to operate in cluster mode, but '.
+              'This service is configured to operate in cluster mode, but '.
               '%s is not defined in the request context. Your webserver '.
-              'configuration needs to forward %s to PHP so Phabricator can '.
+              'configuration needs to forward %s to PHP so the software can '.
               'reject requests received on external interfaces.',
               'SERVER_ADDR',
               'SERVER_ADDR'));
@@ -435,7 +431,7 @@ final class AphrontApplicationConfiguration
           throw new AphrontMalformedRequestException(
             pht('External Interface'),
             pht(
-              'Phabricator is configured in cluster mode and the address '.
+              'This service is configured in cluster mode and the address '.
               'this request was received on ("%s") is not whitelisted as '.
               'a cluster address.',
               $server_addr));
@@ -504,7 +500,10 @@ final class AphrontApplicationConfiguration
       return array($result, array());
     }
 
-    return $this->build404Controller();
+    throw new Exception(
+      pht(
+        'Aphront site ("%s") failed to build a 404 controller.',
+        get_class($site)));
   }
 
   /**
@@ -759,7 +758,7 @@ final class AphrontApplicationConfiguration
   }
 
   private static function newSelfCheckResponse() {
-    $path = idx($_REQUEST, '__path__', '');
+    $path = PhabricatorStartup::getRequestPath();
     $query = idx($_SERVER, 'QUERY_STRING', '');
 
     $pairs = id(new PhutilQueryStringParser())

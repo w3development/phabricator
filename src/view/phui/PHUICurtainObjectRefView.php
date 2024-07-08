@@ -6,6 +6,8 @@ final class PHUICurtainObjectRefView
   private $handle;
   private $epoch;
   private $highlighted;
+  private $exiled;
+  private $exileNote = false;
 
   public function setHandle(PhabricatorObjectHandle $handle) {
     $this->handle = $handle;
@@ -22,6 +24,12 @@ final class PHUICurtainObjectRefView
     return $this;
   }
 
+  public function setExiled($is_exiled, $note = false) {
+    $this->exiled = $is_exiled;
+    $this->exileNote = $note;
+    return $this;
+  }
+
   protected function getTagAttributes() {
     $classes = array();
     $classes[] = 'phui-curtain-object-ref-view';
@@ -29,6 +37,11 @@ final class PHUICurtainObjectRefView
     if ($this->highlighted) {
       $classes[] = 'phui-curtain-object-ref-view-highlighted';
     }
+
+    if ($this->exiled) {
+      $classes[] = 'phui-curtain-object-ref-view-exiled';
+    }
+
     $classes = implode(' ', $classes);
 
     return array(
@@ -58,6 +71,30 @@ final class PHUICurtainObjectRefView
         $epoch_view);
 
       $more_rows[] = phutil_tag('tr', array(), $epoch_cells);
+    }
+
+    if ($this->exiled) {
+      if ($this->exileNote !== false) {
+        $exile_note = $this->exileNote;
+      } else {
+        $exile_note = pht('No View Permission');
+      }
+
+      $exiled_view = array(
+        id(new PHUIIconView())->setIcon('fa-eye-slash red'),
+        ' ',
+        $exile_note,
+      );
+
+      $exiled_cells = array();
+      $exiled_cells[] = phutil_tag(
+        'td',
+        array(
+          'class' => 'phui-curtain-object-ref-view-exiled-cell',
+        ),
+        $exiled_view);
+
+      $more_rows[] = phutil_tag('tr', array(), $exiled_cells);
     }
 
     $header_cells = array();

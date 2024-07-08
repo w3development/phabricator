@@ -216,13 +216,7 @@ final class DiffusionCommitHookEngine extends Phobject {
     $event->setRejectCode($this->rejectCode);
     $event->setRejectDetails($this->rejectDetails);
 
-    $event->openTransaction();
-      $event->save();
-      foreach ($all_updates as $update) {
-        $update->setPushEventPHID($event->getPHID());
-        $update->save();
-      }
-    $event->saveTransaction();
+    $event->saveWithLogs($all_updates);
 
     if ($caught) {
       throw $caught;
@@ -608,9 +602,9 @@ final class DiffusionCommitHookEngine extends Phobject {
       // repository. Particularly, this will cover the cases of a new branch, a
       // completely moved tag, etc.
       $futures[$key] = $this->getRepository()->getLocalCommandFuture(
-        'log --format=%s %s --not --all',
-        '%H',
-        $ref_update->getRefNew());
+        'log %s %s --not --all --',
+        '--format=%H',
+        gitsprintf('%s', $ref_update->getRefNew()));
     }
 
     $content_updates = array();
@@ -1139,7 +1133,7 @@ final class DiffusionCommitHookEngine extends Phobject {
       ->setHookWait(phutil_microseconds_since($hook_start));
 
     $identifier = $this->getRequestIdentifier();
-    if (strlen($identifier)) {
+    if ($identifier !== null && strlen($identifier)) {
       $event->setRequestIdentifier($identifier);
     }
 

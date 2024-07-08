@@ -238,7 +238,7 @@ final class PhabricatorRepositoryPullEngine
     $identifier = $repository->getPHID();
 
     $instance = PhabricatorEnv::getEnvConfig('cluster.instance');
-    if (strlen($instance)) {
+    if ($instance !== null && strlen($instance)) {
       $identifier = "{$identifier}:{$instance}";
     }
 
@@ -575,7 +575,7 @@ final class PhabricatorRepositoryPullEngine
       $ref_rules);
 
     // Empty repositories don't have any refs.
-    if (!strlen(rtrim($stdout))) {
+    if ($stdout === null || !strlen(rtrim($stdout))) {
       return array();
     }
 
@@ -723,7 +723,6 @@ final class PhabricatorRepositoryPullEngine
       // This behavior has been reverted, but users who updated between Feb 1,
       // 2012 and Mar 1, 2012 will have the erroring version. Do a dumb test
       // against stdout to check for this possibility.
-      // See: https://github.com/phacility/phabricator/issues/101/
 
       // NOTE: Mercurial has translated versions, which translate this error
       // string. In a translated version, the string will be something else,

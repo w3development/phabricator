@@ -6,24 +6,19 @@ final class AlmanacNamespace
     PhabricatorPolicyInterface,
     PhabricatorApplicationTransactionInterface,
     PhabricatorProjectInterface,
-    AlmanacPropertyInterface,
     PhabricatorDestructibleInterface,
     PhabricatorNgramsInterface,
     PhabricatorConduitResultInterface {
 
   protected $name;
   protected $nameIndex;
-  protected $mailKey;
   protected $viewPolicy;
   protected $editPolicy;
-
-  private $almanacProperties = self::ATTACHABLE;
 
   public static function initializeNewNamespace() {
     return id(new self())
       ->setViewPolicy(PhabricatorPolicies::POLICY_USER)
-      ->setEditPolicy(PhabricatorPolicies::POLICY_ADMIN)
-      ->attachAlmanacProperties(array());
+      ->setEditPolicy(PhabricatorPolicies::POLICY_ADMIN);
   }
 
   protected function getConfiguration() {
@@ -32,7 +27,6 @@ final class AlmanacNamespace
       self::CONFIG_COLUMN_SCHEMA => array(
         'name' => 'text128',
         'nameIndex' => 'bytes12',
-        'mailKey' => 'bytes20',
       ),
       self::CONFIG_KEY_SCHEMA => array(
         'key_nameindex' => array(
@@ -46,9 +40,8 @@ final class AlmanacNamespace
     ) + parent::getConfiguration();
   }
 
-  public function generatePHID() {
-    return PhabricatorPHID::generateNewPHID(
-      AlmanacNamespacePHIDType::TYPECONST);
+  public function getPHIDType() {
+    return AlmanacNamespacePHIDType::TYPECONST;
   }
 
   public function save() {
@@ -56,15 +49,13 @@ final class AlmanacNamespace
 
     $this->nameIndex = PhabricatorHash::digestForIndex($this->getName());
 
-    if (!$this->mailKey) {
-      $this->mailKey = Filesystem::readRandomCharacters(20);
-    }
-
     return parent::save();
   }
 
   public function getURI() {
-    return '/almanac/namespace/view/'.$this->getName().'/';
+    return urisprintf(
+      '/almanac/namespace/view/%s/',
+      $this->getName());
   }
 
   public function getNameLength() {
@@ -110,53 +101,6 @@ final class AlmanacNamespace
     }
 
     return $namespace;
-  }
-
-
-/* -(  AlmanacPropertyInterface  )------------------------------------------- */
-
-
-  public function attachAlmanacProperties(array $properties) {
-    assert_instances_of($properties, 'AlmanacProperty');
-    $this->almanacProperties = mpull($properties, null, 'getFieldName');
-    return $this;
-  }
-
-  public function getAlmanacProperties() {
-    return $this->assertAttached($this->almanacProperties);
-  }
-
-  public function hasAlmanacProperty($key) {
-    $this->assertAttached($this->almanacProperties);
-    return isset($this->almanacProperties[$key]);
-  }
-
-  public function getAlmanacProperty($key) {
-    return $this->assertAttachedKey($this->almanacProperties, $key);
-  }
-
-  public function getAlmanacPropertyValue($key, $default = null) {
-    if ($this->hasAlmanacProperty($key)) {
-      return $this->getAlmanacProperty($key)->getFieldValue();
-    } else {
-      return $default;
-    }
-  }
-
-  public function getAlmanacPropertyFieldSpecifications() {
-    return array();
-  }
-
-  public function newAlmanacPropertyEditEngine() {
-    throw new PhutilMethodNotImplementedException();
-  }
-
-  public function getAlmanacPropertySetTransactionType() {
-    throw new PhutilMethodNotImplementedException();
-  }
-
-  public function getAlmanacPropertyDeleteTransactionType() {
-    throw new PhutilMethodNotImplementedException();
   }
 
 

@@ -4,7 +4,12 @@
 $ssh_start_time = microtime(true);
 
 $root = dirname(dirname(dirname(__FILE__)));
-require_once $root.'/scripts/__init_script__.php';
+require_once $root.'/scripts/init/init-script.php';
+
+$error_log = id(new PhutilErrorLog())
+  ->setLogName(pht('SSH Error Log'))
+  ->setLogPath(PhabricatorEnv::getEnvConfig('log.ssh-error.path'))
+  ->activateLog();
 
 $ssh_log = PhabricatorSSHLog::getLog();
 
@@ -98,7 +103,7 @@ try {
         '--phabricator-ssh-device',
         $user_name,
         $device_name));
-  } else if (strlen($user_name)) {
+  } else if ($user_name !== null && strlen($user_name)) {
     $user = id(new PhabricatorPeopleQuery())
       ->setViewer(PhabricatorUser::getOmnipotentUser())
       ->withUsernames(array($user_name))
@@ -112,7 +117,7 @@ try {
 
     id(new PhabricatorAuthSessionEngine())
       ->willServeRequestForUser($user);
-  } else if (strlen($device_name)) {
+  } else if ($device_name !== null && strlen($device_name)) {
     if (!$remote_address) {
       throw new Exception(
         pht(
@@ -125,9 +130,9 @@ try {
     if (!PhabricatorEnv::isClusterAddress($remote_address)) {
       throw new Exception(
         pht(
-          'This request originates from outside of the Phabricator cluster '.
-          'address range. Requests signed with a trusted device key must '.
-          'originate from trusted hosts.'));
+          'This request originates from outside of the cluster address range. '.
+          'Requests signed with a trusted device key must originate from '.
+          'trusted hosts.'));
     }
 
     $device = id(new AlmanacDeviceQuery())
@@ -139,6 +144,14 @@ try {
         pht(
           'Invalid device name ("%s"). There is no device with this name.',
           $device_name));
+    }
+
+    if ($device->isDisabled()) {
+      throw new Exception(
+        pht(
+          'This request has authenticated as a device ("%s"), but this '.
+          'device is disabled.',
+          $device->getName()));
     }
 
     // We're authenticated as a device, but we're going to read the user out of
@@ -215,7 +228,9 @@ try {
   $command_list = implode(', ', $command_list);
 
   $error_lines = array();
-  $error_lines[] = pht('Welcome to Phabricator.');
+  $error_lines[] = pht(
+    'Welcome to %s.',
+    PlatformSymbols::getPlatformServerName());
   $error_lines[] = pht(
     'You are logged in as %s.',
     $user_name);
@@ -223,7 +238,7 @@ try {
   if (!$original_argv) {
     $error_lines[] = pht(
       'You have not specified a command to run. This means you are requesting '.
-      'an interactive shell, but Phabricator does not provide interactive '.
+      'an interactive shell, but this server does not provide interactive '.
       'shells over SSH.');
     $error_lines[] = pht(
       '(Usually, you should run a command like "git clone" or "hg push" '.
@@ -257,7 +272,7 @@ try {
   if (empty($workflows[$command])) {
     $error_lines[] = pht(
       'You have specified the command "%s", but that command is not '.
-      'supported by Phabricator. As received by Phabricator, your entire '.
+      'supported by this server. As received by this server, your entire '.
       'argument list was:',
       $command);
 

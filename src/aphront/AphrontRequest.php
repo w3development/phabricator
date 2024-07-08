@@ -66,7 +66,7 @@ final class AphrontRequest extends Phobject {
   }
 
   public static function parseURILineRange($range, $limit) {
-    if (!strlen($range)) {
+    if ($range === null || !strlen($range)) {
       return null;
     }
 
@@ -227,6 +227,43 @@ final class AphrontRequest extends Phobject {
   /**
    * @task data
    */
+  public function getJSONMap($name, $default = array()) {
+    if (!isset($this->requestData[$name])) {
+      return $default;
+    }
+
+    $raw_data = phutil_string_cast($this->requestData[$name]);
+    $raw_data = trim($raw_data);
+    if (!strlen($raw_data)) {
+      return $default;
+    }
+
+    if ($raw_data[0] !== '{') {
+      throw new Exception(
+        pht(
+          'Request parameter "%s" is not formatted properly. Expected a '.
+          'JSON object, but value does not start with "{".',
+          $name));
+    }
+
+    try {
+      $json_object = phutil_json_decode($raw_data);
+    } catch (PhutilJSONParserException $ex) {
+      throw new Exception(
+        pht(
+          'Request parameter "%s" is not formatted properly. Expected a '.
+          'JSON object, but encountered a syntax error: %s.',
+          $name,
+          $ex->getMessage()));
+    }
+
+    return $json_object;
+  }
+
+
+  /**
+   * @task data
+   */
   public function getArr($name, $default = array()) {
     if (isset($this->requestData[$name]) &&
         is_array($this->requestData[$name])) {
@@ -317,9 +354,9 @@ final class AphrontRequest extends Phobject {
       $info = array();
 
       $info[] = pht(
-        'You are trying to save some data to Phabricator, but the request '.
-        'your browser made included an incorrect token. Reload the page '.
-        'and try again. You may need to clear your cookies.');
+        'You are trying to save some data to permanent storage, but the '.
+        'request your browser made included an incorrect token. Reload the '.
+        'page and try again. You may need to clear your cookies.');
 
       if ($this->isAjax()) {
         $info[] = pht('This was an Ajax request.');
@@ -411,11 +448,10 @@ final class AphrontRequest extends Phobject {
   }
 
   private function getPrefixedCookieName($name) {
-    if (strlen($this->cookiePrefix)) {
+    if ($this->cookiePrefix !== null && strlen($this->cookiePrefix)) {
       return $this->cookiePrefix.'_'.$name;
-    } else {
-      return $name;
     }
+    return $name;
   }
 
   public function getCookie($name, $default = null) {
@@ -462,7 +498,7 @@ final class AphrontRequest extends Phobject {
     // domain is. This makes setup easier, and we'll tell administrators to
     // configure a base domain during the setup process.
     $base_uri = PhabricatorEnv::getEnvConfig('phabricator.base-uri');
-    if (!strlen($base_uri)) {
+    if ($base_uri === null || !strlen($base_uri)) {
       return new PhutilURI('http://'.$host.'/');
     }
 
@@ -550,11 +586,11 @@ final class AphrontRequest extends Phobject {
       throw new AphrontMalformedRequestException(
         pht('Bad Host Header'),
         pht(
-          'This Phabricator install is configured as "%s", but you are '.
-          'using the domain name "%s" to access a page which is trying to '.
-          'set a cookie. Access Phabricator on the configured primary '.
-          'domain or a configured alternate domain. Phabricator will not '.
-          'set cookies on other domains for security reasons.',
+          'This server is configured as "%s", but you are using the domain '.
+          'name "%s" to access a page which is trying to set a cookie. '.
+          'Access this service on the configured primary domain or a '.
+          'configured alternate domain. Cookies will not be set on other '.
+          'domains for security reasons.',
           $configured_as,
           $accessed_as),
         true);
@@ -919,7 +955,7 @@ final class AphrontRequest extends Phobject {
     $submit_cookie = PhabricatorCookies::COOKIE_SUBMIT;
 
     $submit_key = $this->getCookie($submit_cookie);
-    if (strlen($submit_key)) {
+    if ($submit_key !== null && strlen($submit_key)) {
       $this->clearCookie($submit_cookie);
       $this->submitKey = $submit_key;
     }
